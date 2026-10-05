@@ -1,0 +1,187 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: mediai-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mediai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-mediai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mediai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: mediai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: mediai-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant-key}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+
+  # CrewAI Backend Service
+  crewai:
+    build:
+      context: ./crewai-backend
+      dockerfile: Dockerfile
+    container_name: mediai-crewai
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mediai:devpassword@postgres:5432/mediai}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+    restart: unless-stopped
+
+  # Conversation Service
+  conversation-service:
+    build:
+      context: ./conversation-service
+      dockerfile: Dockerfile
+    container_name: mediai-conversation
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mediai:devpassword@postgres:5432/mediai}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CREWAI_URL: ${CREWAI_URL:-http://crewai:8001}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      crewai:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+    restart: unless-stopped
+
+  # API Integration Service
+  api-integration:
+    build:
+      context: ./api-integration
+      dockerfile: Dockerfile
+    container_name: mediai-api-integration
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mediai:devpassword@postgres:5432/mediai}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CREWAI_URL: ${CREWAI_URL:-http://crewai:8001}
+      CONVERSATION_SERVICE_URL: ${CONVERSATION_SERVICE_URL:-http://conversation-service:8002}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      crewai:
+        condition: service_healthy
+      conversation-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+    restart: unless-stopped
+
+  # Open WebUI Medical Interface
+  openwebui:
+    build:
+      context: ./openwebui-medical
+      dockerfile: Dockerfile
+    container_name: mediai-openwebui
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+    environment:
+      VITE_API_BASE_URL: ${OPENWEBUI_API_BASE:-http://localhost:8003}
+      API_INTEGRATION_URL: ${API_INTEGRATION_URL:-http://api-integration:8003}
+      CONVERSATION_SERVICE_URL: ${CONVERSATION_SERVICE_URL:-http://conversation-service:8002}
+      NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      - api-integration
+      - conversation-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediai-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  qdrant_data:
+    driver: local
+
+networks:
+  mediai-network:
+    driver: bridge

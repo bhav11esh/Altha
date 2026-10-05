@@ -1,0 +1,118 @@
+# Environment variables (local only)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+.eslintcache
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.env.swp
+.vimrc
+.python-version
+
+# Docker
+postgres_data/
+redis_data/
+qdrant_data/
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+/logs
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# IDE specific
+*.iml
+.gradle
+.idea/
+local.properties
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Credentials (absolute safety)
+credentials.json
+*.key
+*.pem
+*.p12
+
+# Database backups
+*.sql
+*.sql.gz
+*.backup
+
+# Package manager locks (optional - uncomment if desired)
+# package-lock.json
+# yarn.lock
+# poetry.lock
+
+# Documentation generated
+/docs/_build/
+/docs/.doctrees/
+
+# Environment-specific files
+.env.production
+.env.staging
+.env.development
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

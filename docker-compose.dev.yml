@@ -1,0 +1,61 @@
+version: '3.8'
+
+# Development overrides for docker-compose.yml
+services:
+  postgres:
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  redis:
+    volumes:
+      - ./redis_data:/data
+
+  qdrant:
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+
+  crewai:
+    build:
+      context: ./crewai-backend
+      dockerfile: Dockerfile
+    environment:
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./crewai-backend:/app
+      - /app/__pycache__
+    command: uvicorn app:app --host 0.0.0.0 --port 8001 --reload
+
+  conversation-service:
+    build:
+      context: ./conversation-service
+      dockerfile: Dockerfile
+    environment:
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./conversation-service:/app
+      - /app/__pycache__
+    command: uvicorn app:app --host 0.0.0.0 --port 8002 --reload
+
+  api-integration:
+    build:
+      context: ./api-integration
+      dockerfile: Dockerfile
+    environment:
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./api-integration:/app
+      - /app/__pycache__
+    command: uvicorn app:app --host 0.0.0.0 --port 8003 --reload
+
+  openwebui:
+    build:
+      context: ./openwebui-medical
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./openwebui-medical/frontend:/app/frontend
+      - ./openwebui-medical/backend:/app/backend
+      - /app/node_modules
+      - /app/__pycache__

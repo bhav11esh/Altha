@@ -1,0 +1,221 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║              CONVERSATION SERVICE - ENVIRONMENT VARIABLES QUICK REFERENCE  ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─ CRITICAL (MUST SET) ───────────────────────────────────────────────────────┐
+│                                                                             │
+│  DATABASE_URL=postgresql://user:password@localhost:5432/conversation_db   │
+│  └─ PostgreSQL connection string                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ LLM PROVIDER (CHOOSE ONE OR MORE) ──────────────────────────────────────────┐
+│                                                                             │
+│  OpenAI (GPT-4, most popular):                                            │
+│    OPENAI_API_KEY=sk-your-key-here                                       │
+│    OPENAI_MODEL=gpt-4                                                     │
+│                                                                             │
+│  Anthropic (Claude 3, most capable):                                      │
+│    ANTHROPIC_API_KEY=sk-ant-your-key-here                               │
+│    ANTHROPIC_MODEL=claude-3-opus-20240229                               │
+│                                                                             │
+│  Groq (Fastest, cheapest):                                               │
+│    GROQ_API_KEY=gsk-your-key-here                                       │
+│    GROQ_MODEL=mixtral-8x7b-32768                                        │
+│                                                                             │
+│  Google Gemini:                                                            │
+│    GOOGLE_API_KEY=your-google-key-here                                  │
+│    GOOGLE_MODEL=gemini-pro                                              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ SECURITY KEYS (GENERATE STRONG RANDOM KEYS) ───────────────────────────────┐
+│                                                                             │
+│  JWT_SECRET=random-32-character-string-minimum                            │
+│  ENCRYPTION_KEY=base64-encoded-32-byte-key                               │
+│  API_KEY=your-api-key-for-authentication                                 │
+│                                                                             │
+│  Generate with:                                                             │
+│    python -c "import secrets; print(secrets.token_urlsafe(32))"         │
+│    openssl rand -base64 32                                               │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ CACHING & PERFORMANCE (OPTIONAL) ──────────────────────────────────────────┐
+│                                                                             │
+│  Redis:                                                                     │
+│    REDIS_URL=redis://localhost:6379/0                                    │
+│    REDIS_PASSWORD=                                                        │
+│    REDIS_TTL=3600                                                        │
+│                                                                             │
+│  Vector Search (for semantic similarity):                                 │
+│    QDRANT_URL=http://localhost:6333                                      │
+│    QDRANT_API_KEY=                                                       │
+│    QDRANT_COLLECTION=medical_findings                                    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ APPLICATION SETTINGS ──────────────────────────────────────────────────────┐
+│                                                                             │
+│  ENVIRONMENT=development          # development, staging, production      │
+│  DEBUG=True                        # False in production                   │
+│  LOG_LEVEL=INFO                    # DEBUG, INFO, WARNING, ERROR           │
+│  HOST=0.0.0.0                                                             │
+│  PORT=8000                                                                │
+│  PYTHONUNBUFFERED=1                                                       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ NOTIFICATIONS (OPTIONAL) ──────────────────────────────────────────────────┐
+│                                                                             │
+│  Email (SendGrid):                                                          │
+│    SENDGRID_API_KEY=SG.xxxxx                                             │
+│    SENDGRID_FROM_EMAIL=noreply@example.com                              │
+│                                                                             │
+│  SMS/WhatsApp (Twilio):                                                    │
+│    TWILIO_ACCOUNT_SID=ACxxxxx                                            │
+│    TWILIO_AUTH_TOKEN=xxxxx                                              │
+│    TWILIO_FROM_NUMBER=+1234567890                                       │
+│                                                                             │
+│  Slack:                                                                     │
+│    SLACK_BOT_TOKEN=xoxb-xxxxx                                            │
+│    SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxxxx            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ MONITORING & ERROR TRACKING (OPTIONAL) ────────────────────────────────────┐
+│                                                                             │
+│  Sentry:                                                                    │
+│    SENTRY_DSN=https://key@sentry.io/project-id                          │
+│    SENTRY_ENVIRONMENT=production                                         │
+│                                                                             │
+│  Datadog:                                                                   │
+│    DATADOG_API_KEY=xxxxx                                                 │
+│    DATADOG_APP_KEY=xxxxx                                                 │
+│                                                                             │
+│  New Relic:                                                                 │
+│    NEW_RELIC_LICENSE_KEY=xxxxx                                           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ HEALTHCARE INTEGRATIONS (OPTIONAL) ────────────────────────────────────────┐
+│                                                                             │
+│  FHIR Server (HL7 Healthcare Standard):                                   │
+│    FHIR_SERVER_URL=https://fhir.example.com/                            │
+│    FHIR_SERVER_AUTH_TOKEN=Bearer xxxxx                                  │
+│                                                                             │
+│  EHR/EMR:                                                                   │
+│    EHR_API_URL=https://ehr.example.com/api                              │
+│    EHR_API_KEY=xxxxx                                                     │
+│    EHR_PRACTICE_ID=12345                                                 │
+│                                                                             │
+│  Drug & Disease References:                                                │
+│    DRUGS_DB_URL=https://api.drugs.com                                    │
+│    DISEASE_DB_URL=https://disease.api                                    │
+│    INTERACTION_CHECKER_URL=https://check.drugs.com/interactions         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ COMPLIANCE & SECURITY (HEALTHCARE) ────────────────────────────────────────┐
+│                                                                             │
+│  HIPAA_COMPLIANCE_MODE=True                                              │
+│  ENCRYPT_PATIENT_DATA=True                                               │
+│  DATA_RETENTION_DAYS=2555         # ~7 years for HIPAA                   │
+│  MASK_PATIENT_ID=True                                                    │
+│  MASK_EMAIL=True                                                          │
+│  MASK_PHONE=True                                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─ FEATURE FLAGS (OPTIONAL) ──────────────────────────────────────────────────┐
+│                                                                             │
+│  ENABLE_FINDING_EXTRACTION=True       # Extract diagnoses, drugs, etc     │
+│  ENABLE_CONTEXT_LINKING=True          # Link findings to previous turns   │
+│  ENABLE_AUDIT_LOGGING=True            # Log all actions                   │
+│  ENABLE_FINDING_CACHING=True          # Cache extracted findings          │
+│  ENABLE_SEMANTIC_SEARCH=False         # Use embeddings (requires setup)   │
+│  ENABLE_LLM_ENHANCEMENT=False         # Use LLM to score confidence       │
+│  ENABLE_MULTI_LANGUAGE=False          # Support multiple languages        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                         MINIMAL WORKING CONFIG                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+# Absolute minimum to get running:
+DATABASE_URL=postgresql://user:password@localhost:5432/conversation_db
+OPENAI_API_KEY=sk-your-openai-key-here
+JWT_SECRET=random-32-char-string-minimum
+ENCRYPTION_KEY=base64-encoded-32-byte-key
+
+# Run:
+# uvicorn app:app --reload
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     PRODUCTION RECOMMENDED CONFIG                         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+ENVIRONMENT=production
+DEBUG=False
+LOG_LEVEL=WARNING
+DATABASE_URL=postgresql://prod_user:prod_pwd@prod-db.xxx.rds.amazonaws.com:5432/db
+OPENAI_API_KEY=sk-xxxxx
+REDIS_URL=redis://prod-redis.xxx:6379/0
+QDRANT_URL=https://xxxxx.qdrant.io
+QDRANT_API_KEY=xxxxx
+JWT_SECRET=strong-random-key-32-chars
+ENCRYPTION_KEY=base64-encoded-32-byte-key
+SENTRY_DSN=https://key@sentry.io/prod-project
+DATADOG_API_KEY=xxxxx
+SENDGRID_API_KEY=SG.xxxxx
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxxxx
+HIPAA_COMPLIANCE_MODE=True
+ENCRYPT_PATIENT_DATA=True
+MASK_PATIENT_ID=True
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    HOW TO GET EACH API KEY                                ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+OpenAI:
+  1. Go to https://platform.openai.com/account/api-keys
+  2. Click "Create new secret key"
+  3. Copy the key starting with "sk-"
+
+Claude (Anthropic):
+  1. Go to https://console.anthropic.com/
+  2. Create API key
+  3. Copy the key starting with "sk-ant-"
+
+Groq:
+  1. Go to https://console.groq.com
+  2. Create API key
+  3. Copy the key starting with "gsk-"
+
+SendGrid:
+  1. Go to https://app.sendgrid.com/settings/api_keys
+  2. Create API key
+  3. Copy the key starting with "SG."
+
+Slack:
+  1. Go to https://api.slack.com/apps
+  2. Create new app
+  3. Go to "Incoming Webhooks" and create webhook
+  4. Copy the webhook URL
+
+Sentry:
+  1. Go to https://sentry.io/
+  2. Create project
+  3. Get DSN URL
+
+PostgreSQL (AWS RDS):
+  1. Create RDS instance
+  2. Get endpoint, username, password
+  3. Connection string: postgresql://user:pwd@endpoint:5432/dbname
+
+Redis:
+  1. Local: redis://localhost:6379/0
+  2. Docker: docker run -d -p 6379:6379 redis:latest
+  3. Cloud: https://redis.com or https://upstash.com
+

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medical-ai-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./medical_ai.db
+      - SECRET_KEY=your-secret-key-change-in-production
+      - CREWAI_BACKEND_URL=http://crewai:8001
+    volumes:
+      - ./backend:/app
+      - medical-ai-data:/app/data
+    depends_on:
+      - crewai
+    networks:
+      - medical-ai-network
+    command: python app.py
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medical-ai-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - medical-ai-network
+
+  crewai:
+    image: crewai/crewai:latest
+    container_name: crewai-backend
+    ports:
+      - "8001:8001"
+    networks:
+      - medical-ai-network
+    # Note: In production, you'll need to set up the actual CrewAI service
+    # This is a placeholder - configure with your CrewAI setup
+
+volumes:
+  medical-ai-data:
+
+networks:
+  medical-ai-network:
+    driver: bridge
