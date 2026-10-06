@@ -56,7 +56,7 @@ class Finding(Base):
     finding_type = Column(Enum(FindingType), nullable=False, index=True)
     value = Column(Text, nullable=False)
     confidence = Column(Float, default=1.0, nullable=False)  # 0.0 to 1.0
-    metadata = Column(JSON, nullable=True)  # Additional structured data
+    metadata_json = Column(JSON, nullable=True)  # Additional structured data
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

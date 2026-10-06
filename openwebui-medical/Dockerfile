@@ -50,4 +50,4 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
     CMD curl -f http://localhost:3000 || exit 1
 
 # Start both services
-CMD ["sh", "-c", "nginx -g 'daemon off;' & uvicorn app:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "nginx -g 'daemon off;' & uvicorn app:app --host 0.0.0.0 --port 8080"]

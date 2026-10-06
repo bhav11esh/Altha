@@ -1,304 +1,168 @@
-import httpx
-import json
-from typing import Optional, List, Dict, Any
+import logging
+import os
 from datetime import datetime
-from sqlalchemy.orm import Session
-from models import Message, Conversation, AgentReasoning, AuditLog
-from schemas import MessageResponse, AgentReasoningSchema
-from phi_detector import PHIDetector
-import asyncio
+from typing import Any, Dict, List
 
-# CrewAI backend URL
-CREWAI_BACKEND_URL = "http://localhost:8001"
-TIMEOUT = 60.0
+from fastapi import HTTPException
+from openai import OpenAI
+from sqlalchemy.orm import Session
+
+from models import AuditLog, Conversation, Message
+from phi_detector import PHIDetector
+from schemas import MessageResponse
+
+logger = logging.getLogger(__name__)
 
 phi_detector = PHIDetector()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+HISTORY_LIMIT = 10
+SYSTEM_PROMPT = (
+    "You are a medical information assistant. You do not replace a licensed clinician. "
+    "Give clear, cautious, evidence-based information and state when a clinician must decide."
+)
 
 
-async def send_to_crewai(
-    message: str,
-    conversation_history: List[Dict[str, str]],
-    model: str = "mistral",
-) -> Dict[str, Any]:
-    """Send message to CrewAI backend and get response with reasoning"""
-    payload = {
-        "message": message,
-        "history": conversation_history,
-        "model": model,
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            response = await client.post(
-                f"{CREWAI_BACKEND_URL}/chat",
-                json=payload
-            )
-            response.raise_for_status()
-            return response.json()
-    except Exception as e:
-        # Return mock response if CrewAI is not available
-        print(f"Error contacting CrewAI: {e}")
-        return get_mock_crewai_response(message, model)
-
-
-def get_mock_crewai_response(message: str, model: str) -> Dict[str, Any]:
-    """Return mock CrewAI response for demo purposes"""
+def _phi_dict(text: str) -> Dict[str, List[str]]:
+    phi = phi_detector.detect_phi(text)
     return {
-        "response": f"I'm analyzing your medical query about: {message[:50]}... As a medical AI assistant, I would need to consult with multiple agents for a comprehensive answer.",
-        "agents": [
-            {
-                "name": "Diagnostic",
-                "reasoning": "Initial symptom analysis and differential diagnosis",
-                "confidence": 85,
-            },
-            {
-                "name": "Evidence",
-                "reasoning": "Reviewing clinical evidence and medical literature",
-                "confidence": 78,
-            },
-            {
-                "name": "Pharmacology",
-                "reasoning": "Analyzing medication interactions and treatment options",
-                "confidence": 82,
-            },
-            {
-                "name": "Risk Assessment",
-                "reasoning": "Evaluating patient risk factors and safety concerns",
-                "confidence": 88,
-            },
-        ],
-        "model": model,
+        "names": phi.names,
+        "ids": phi.ids,
+        "emails": phi.emails,
+        "phones": phi.phones,
+        "medical_records": phi.medical_records,
     }
 
 
-async def process_message(
+def _redact(text: str) -> str:
+    redacted, _ = phi_detector.anonymize_text(text, phi_detector.detect_phi(text))
+    return redacted
+
+
+def generate_reply(history: List[Dict[str, str]]) -> str:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
+
+    client = OpenAI(api_key=api_key)
+    try:
+        completion = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{"role": "system", "content": SYSTEM_PROMPT}, *history],
+        )
+    except Exception:
+        logger.exception("openai_request_failed")
+        raise HTTPException(status_code=502, detail="AI provider request failed")
+    return completion.choices[0].message.content or ""
+
+
+def process_message(
     db: Session,
-    conversation_id: Optional[int],
+    conversation_id: int | None,
     user_id: int,
     message_text: str,
-    model: str = "mistral",
-    user_email: str = "",
 ) -> MessageResponse:
-    """Process a user message: detect PHI, send to CrewAI, store response"""
-
-    # Detect PHI in the message
-    phi = phi_detector.detect_phi(message_text)
-    is_anonymized = False
-    original_content = None
-
-    # Get or create conversation
     if conversation_id:
         conversation = db.query(Conversation).filter(
             Conversation.id == conversation_id,
             Conversation.user_id == user_id,
         ).first()
         if not conversation:
-            raise ValueError("Conversation not found")
+            raise LookupError("Conversation not found")
     else:
         conversation = Conversation(
             user_id=user_id,
-            title=message_text[:50] + "...",
-            model=model,
+            title=message_text[:50] or "New Conversation",
+            model=OPENAI_MODEL,
         )
         db.add(conversation)
         db.flush()
 
-    # Store user message
+    phi = _phi_dict(message_text)
+    has_phi = any(phi.values())
     user_message = Message(
         conversation_id=conversation.id,
         role="user",
         content=message_text,
-        detected_phi={
-            "names": phi.names,
-            "ids": phi.ids,
-            "emails": phi.emails,
-            "phones": phi.phones,
-            "medical_records": phi.medical_records,
-        } if phi.names or phi.ids or phi.emails else None,
+        detected_phi=phi if has_phi else None,
         is_anonymized=False,
     )
     db.add(user_message)
     db.flush()
 
-    # Log PHI detection if found
-    if phi.names or phi.ids or phi.emails:
-        audit_log = AuditLog(
+    if has_phi:
+        db.add(AuditLog(
             user_id=user_id,
             action="phi_detected",
             details={
                 "message_id": user_message.id,
-                "phi_types": {
-                    "names": len(phi.names),
-                    "ids": len(phi.ids),
-                    "emails": len(phi.emails),
-                    "phones": len(phi.phones),
-                    "medical_records": len(phi.medical_records),
-                },
+                "phi_types": {key: len(values) for key, values in phi.items()},
             },
-        )
-        db.add(audit_log)
+        ))
 
-    # Get conversation history for context (last 2 turns)
-    history_messages = db.query(Message).filter(
+    recent = db.query(Message).filter(
         Message.conversation_id == conversation.id,
-    ).order_by(Message.created_at.desc()).limit(4).all()
-
-    history = [
-        {"role": msg.role, "content": msg.content}
-        for msg in reversed(history_messages)
+    ).order_by(Message.created_at.desc(), Message.id.desc()).limit(HISTORY_LIMIT).all()
+    history: List[Dict[str, Any]] = [
+        {"role": m.role, "content": _redact(m.content)} for m in reversed(recent)
     ]
 
-    # Send to CrewAI
-    crewai_response = await send_to_crewai(
-        message_text,
-        history,
-        model=model,
-    )
+    reply = generate_reply(history)
 
-    # Parse response
-    response_text = crewai_response.get("response", "No response")
-    agents = crewai_response.get("agents", [])
-
-    # Store assistant message
     assistant_message = Message(
         conversation_id=conversation.id,
         role="assistant",
-        content=response_text,
-        model_used=model,
-        agent_reasoning=[
-            {
-                "agent_name": agent["name"],
-                "reasoning_text": agent.get("reasoning", ""),
-                "confidence_score": agent.get("confidence", None),
-            }
-            for agent in agents
-        ] if agents else None,
+        content=reply,
+        model_used=OPENAI_MODEL,
+        is_anonymized=False,
     )
     db.add(assistant_message)
-
-    # Store agent reasoning details
-    for agent in agents:
-        reasoning = AgentReasoning(
-            message_id=assistant_message.id,
-            agent_name=agent["name"],
-            reasoning_text=agent.get("reasoning", ""),
-            confidence_score=agent.get("confidence", None),
-        )
-        db.add(reasoning)
-
-    # Log message sent
-    audit_log = AuditLog(
+    db.add(AuditLog(
         user_id=user_id,
         action="message_sent",
         details={
             "conversation_id": conversation.id,
             "message_id": user_message.id,
-            "model": model,
-            "has_phi": phi.names or phi.ids or phi.emails or False,
+            "model": OPENAI_MODEL,
+            "has_phi": has_phi,
         },
-    )
-    db.add(audit_log)
-
-    # Update conversation model
-    conversation.model = model
+    ))
     conversation.updated_at = datetime.utcnow()
-
     db.commit()
     db.refresh(assistant_message)
 
-    # Format response with agent reasoning
-    agent_reasoning = [
-        AgentReasoningSchema(
-            agent_name=r.agent_name,
-            reasoning_text=r.reasoning_text,
-            confidence_score=r.confidence_score,
-        )
-        for r in assistant_message.reasoning_details
-    ]
-
-    return MessageResponse(
-        id=assistant_message.id,
-        conversation_id=assistant_message.conversation_id,
-        role=assistant_message.role,
-        content=assistant_message.content,
-        detected_phi=None,
-        is_anonymized=False,
-        model_used=model,
-        agent_reasoning=agent_reasoning if agent_reasoning else None,
-        created_at=assistant_message.created_at,
-    )
+    return MessageResponse.model_validate(assistant_message)
 
 
-def anonymize_message(
-    db: Session,
-    message_id: int,
-    user_id: int,
-) -> Dict[str, Any]:
-    """Anonymize a message and store original"""
-    message = db.query(Message).filter(
+def anonymize_message(db: Session, message_id: int, user_id: int) -> Dict[str, Any]:
+    message = db.query(Message).join(Conversation).filter(
         Message.id == message_id,
-        Message.conversation_id == Conversation.id,
         Conversation.user_id == user_id,
     ).first()
-
     if not message:
-        raise ValueError("Message not found")
-
+        raise LookupError("Message not found")
     if message.role != "user":
-        raise ValueError("Can only anonymize user messages")
+        raise ValueError("Only user messages can be anonymized")
 
-    # Detect PHI again
-    phi = phi_detector.detect_phi(message.content)
-
-    # Anonymize
-    anonymized, replacements = phi_detector.anonymize_text(message.content, phi)
-
-    # Store original and mark as anonymized
+    anonymized, replacements = phi_detector.anonymize_text(
+        message.content, phi_detector.detect_phi(message.content)
+    )
     message.original_content = message.content
     message.content = anonymized
     message.is_anonymized = True
-
-    # Log anonymization
-    audit_log = AuditLog(
+    message.detected_phi = _phi_dict(message.original_content)
+    db.add(AuditLog(
         user_id=user_id,
         action="anonymized",
-        details={
-            "message_id": message_id,
-            "items_anonymized": len(replacements),
-        },
-    )
-    db.add(audit_log)
+        details={"message_id": message_id, "items_anonymized": len(replacements)},
+    ))
     db.commit()
 
-    return {
-        "message_id": message_id,
-        "anonymized_content": anonymized,
-        "replacements": replacements,
-    }
+    return {"message_id": message_id, "anonymized_content": anonymized}
 
 
-def get_conversation_context(
-    db: Session,
-    conversation_id: int,
-    user_id: int,
-    limit: int = 2,
-) -> List[MessageResponse]:
-    """Get the last N turns from a conversation"""
-    messages = db.query(Message).filter(
+def get_conversation_context(db: Session, conversation_id: int, user_id: int, limit: int = 2) -> List[MessageResponse]:
+    messages = db.query(Message).join(Conversation).filter(
         Message.conversation_id == conversation_id,
-        Message.conversation.has(Conversation.user_id == user_id),
-    ).order_by(Message.created_at.desc()).limit(limit * 2).all()
-
-    return [
-        MessageResponse(
-            id=msg.id,
-            conversation_id=msg.conversation_id,
-            role=msg.role,
-            content=msg.content,
-            detected_phi=msg.detected_phi,
-            is_anonymized=msg.is_anonymized,
-            model_used=msg.model_used,
-            created_at=msg.created_at,
-        )
-        for msg in reversed(messages)
-    ]
+        Conversation.user_id == user_id,
+    ).order_by(Message.created_at.desc(), Message.id.desc()).limit(limit * 2).all()
+    return [MessageResponse.model_validate(m) for m in reversed(messages)]

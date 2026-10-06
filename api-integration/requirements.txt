@@ -19,9 +19,9 @@ httpx==0.25.2
 aiohttp==3.9.1
 
 # FHIR Support
-fhir==5.0.0
-fhir-spec==0.2.0
-pydantic-fhir==0.0.1
+# fhir==0.0.4  # FHIR support
+# fhir-spec==0.2.0
+# pydantic-fhir==0.0.1
 
 # Utilities
 python-dotenv==1.0.0

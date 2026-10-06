@@ -116,3 +116,6 @@ credentials.json
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Third-party clone of upstream Open WebUI (re-clone with git)
+open-webui-upstream/

@@ -12,6 +12,9 @@ import os
 import logging
 from datetime import datetime
 
+from database import init_db
+from routes import router
+
 # Configure logging
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
@@ -31,6 +34,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(router)
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
 
 # Pydantic Models
 class HealthResponse(BaseModel):

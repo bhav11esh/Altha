@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       POSTGRES_DB: ${POSTGRES_DB:-mediai}
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -49,7 +49,7 @@ services:
     environment:
       QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant-key}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -147,29 +147,16 @@ services:
       - mediai-network
     restart: unless-stopped
 
-  # Open WebUI Medical Interface
-  openwebui:
-    build:
-      context: ./openwebui-medical
-      dockerfile: Dockerfile
-    container_name: mediai-openwebui
+  # Open WebUI (upstream release) with PHI Guard filter (see medical-layer/)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.11.4
+    container_name: mediai-open-webui
     ports:
-      - "3000:3000"
-      - "8000:8000"
-    environment:
-      VITE_API_BASE_URL: ${OPENWEBUI_API_BASE:-http://localhost:8003}
-      API_INTEGRATION_URL: ${API_INTEGRATION_URL:-http://api-integration:8003}
-      CONVERSATION_SERVICE_URL: ${CONVERSATION_SERVICE_URL:-http://conversation-service:8002}
-      NODE_ENV: ${NODE_ENV:-production}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    depends_on:
-      - api-integration
-      - conversation-service
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "3000:8080"
+    env_file:
+      - .env
+    volumes:
+      - open_webui_data:/app/backend/data
     networks:
       - mediai-network
     restart: unless-stopped
@@ -180,6 +167,8 @@ volumes:
   redis_data:
     driver: local
   qdrant_data:
+    driver: local
+  open_webui_data:
     driver: local
 
 networks:

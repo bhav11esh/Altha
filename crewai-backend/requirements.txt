@@ -6,7 +6,6 @@ pydantic-settings==2.1.0
 
 # CrewAI
 crewai==0.1.0
-crewai-tools==0.1.0
 
 # Database
 sqlalchemy==2.0.23
@@ -26,9 +25,6 @@ httpx==0.25.2
 aiohttp==3.9.1
 
 # AI/ML
-openai==1.3.9
-anthropic==0.7.1
-langchain==0.1.0
 
 # Utilities
 python-dotenv==1.0.0
