@@ -22,7 +22,7 @@ PATTERNS = [
     (re.compile(r"\b(?:MRN|Medical Record|Patient ID|PID)[:\s#]*\d+\b", re.IGNORECASE), "MRN"),
     (re.compile(r"\b(?:DOB|Date of Birth)[:\s]*\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b", re.IGNORECASE), "DOB"),
 ]
-NAME_RE = re.compile(r"(?:[Pp]atient|Mr\.?|Mrs\.?|Ms\.?)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)")
+NAME_RE = re.compile(r"(?:[Pp]atient|Mr\.?|Mrs\.?|Ms\.?)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)")
 
 
 def redact(text: str, redact_names: bool) -> tuple[str, Dict[str, int]]:
@@ -38,12 +38,13 @@ def redact(text: str, redact_names: bool) -> tuple[str, Dict[str, int]]:
     return text, counts
 
 
-def write_audit(user_id: Optional[str], counts: Dict[str, int]) -> None:
+def write_audit(user_id: Optional[str], counts: Dict[str, int], stage: str) -> None:
     AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "user_id": user_id,
         "action": "phi_redacted",
+        "stage": stage,
         "counts": counts,
     }
     with AUDIT_PATH.open("a", encoding="utf-8") as fh:
@@ -59,6 +60,7 @@ class Filter:
         self.valves = self.Valves()
 
     def inlet(self, body: Dict[str, Any], __user__: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Redacts the user's typed message as early as possible, and audits what they typed."""
         if not self.valves.enabled:
             return body
 
@@ -75,6 +77,28 @@ class Filter:
                 redacted, counts = redact(message["content"], self.valves.redact_names)
                 message["content"] = redacted
                 if message is latest_user and counts:
-                    write_audit((__user__ or {}).get("id"), counts)
+                    write_audit((__user__ or {}).get("id"), counts, stage="inlet")
+
+        return body
+
+    def request(self, body: Dict[str, Any], __user__: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Runs after retrieved knowledge-base / tool content has been merged into the
+        messages (as a system message or appended to the user message) and before the
+        request leaves for the model. inlet alone cannot catch this: knowledge text is
+        injected after inlet runs. Scans every message role, since retrieved content can
+        land in either place."""
+        if not self.valves.enabled:
+            return body
+
+        total_counts: Dict[str, int] = {}
+        for message in body.get("messages", []):
+            if isinstance(message.get("content"), str):
+                redacted, counts = redact(message["content"], self.valves.redact_names)
+                message["content"] = redacted
+                for key, value in counts.items():
+                    total_counts[key] = total_counts.get(key, 0) + value
+
+        if total_counts:
+            write_audit((__user__ or {}).get("id"), total_counts, stage="request")
 
         return body
